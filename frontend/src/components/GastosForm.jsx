@@ -6,10 +6,11 @@ export default function GastosForm({ onGastoCreado }) {
   const { obraSeleccionada } = useObra();
 
   const [fecha, setFecha] = useState("");
-  const [concepto, setConcepto] = useState("");
+  const [descripcion, setDescripcion] = useState("");
   const [monto, setMonto] = useState("");
   const [cuentaId, setCuentaId] = useState("");
   const [partida, setPartida] = useState("");
+  const [comprobanteUrl, setComprobanteUrl] = useState("");
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,7 +22,7 @@ export default function GastosForm({ onGastoCreado }) {
       setError("Selecciona una obra primero.");
       return;
     }
-    if (!fecha || !concepto || !monto) {
+    if (!fecha || !descripcion || !monto) {
       setError("Todos los campos son obligatorios");
       return;
     }
@@ -44,17 +45,17 @@ export default function GastosForm({ onGastoCreado }) {
         setError("Sesión expirada. Inicia sesión de nuevo.");
         return;
       }
-console.log("MONTO ANTES DE ENVIAR:", monto);
 
       // ✅ Backend exige: obra_id, fecha, monto, cuenta_id, partida
-    const payload = {
-  obra_id: obraSeleccionada.id,
-  fecha,
-  monto: Number(monto),
-  cuenta_id: Number(cuentaId),
-  partida,
-  concepto,
-};
+      const payload = {
+        obra_id: obraSeleccionada.id,
+        fecha,
+        monto: Number(monto),
+        cuenta_id: Number(cuentaId),
+        partida,
+        descripcion,
+        comprobante_url: comprobanteUrl || null,
+      };
 
 const nuevoGasto = await createGasto(payload, token);
 
@@ -63,8 +64,9 @@ const nuevoGasto = await createGasto(payload, token);
 
       // limpiar form
       setFecha("");
-      setConcepto("");
+      setDescripcion("");
       setMonto("");
+      setComprobanteUrl("");
     } catch (e) {
       setError(e.message || "Error al registrar gasto");
     } finally {
@@ -90,8 +92,8 @@ const nuevoGasto = await createGasto(payload, token);
         <input
           type="text"
           placeholder="Concepto"
-          value={concepto}
-          onChange={(e) => setConcepto(e.target.value)}
+          value={descripcion}
+          onChange={(e) => setDescripcion(e.target.value)}
         />
       </div>
 
@@ -123,6 +125,14 @@ const nuevoGasto = await createGasto(payload, token);
   />
 </div>
 
+<div>
+  <input
+    type="url"
+    placeholder="URL del comprobante (opcional)"
+    value={comprobanteUrl}
+    onChange={(e) => setComprobanteUrl(e.target.value)}
+  />
+</div>
 
       <button disabled={loading}>
         {loading ? "Guardando..." : "Guardar gasto"}

@@ -4,10 +4,42 @@ const router = express.Router();
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth.middleware");
 
+async function obraActiva(obraId) {
+  const [rows] = await pool.query(
+    `SELECT id, estado FROM obras WHERE id = ? LIMIT 1`,
+    [obraId]
+  );
+  if (rows.length === 0) {
+    return { ok: false, error: "Obra no encontrada" };
+  }
+  if (rows[0].estado !== "activa") {
+    return { ok: false, error: "No se pueden registrar gastos en obras terminadas" };
+  }
+  return { ok: true };
+}
+
+async function ensureObraAsignada(req, obraId) {
+  if (req.user.rol !== "residente") return true;
+  const [rows] = await pool.query(
+    `SELECT 1 FROM usuarios_obras WHERE usuario_id = ? AND obra_id = ? LIMIT 1`,
+    [req.user.id, obraId]
+  );
+  return rows.length > 0;
+}
+
 // ✅ Crear gasto
 router.post("/gastos", requireAuth, async (req, res) => {
   try {
-    const { obra_id, fecha, monto, cuenta_id, partida, descripcion = null } = req.body;
+    const {
+      obra_id,
+      fecha,
+      monto,
+      cuenta_id,
+      partida,
+      descripcion = null,
+      concepto = null,
+      comprobante_url = null
+    } = req.body;
 
     if (!obra_id || !fecha || monto == null || !cuenta_id || !partida) {
       return res.status(400).json({
@@ -15,12 +47,35 @@ router.post("/gastos", requireAuth, async (req, res) => {
       });
     }
 
+    if (Number(monto) <= 0) {
+      return res.status(400).json({ error: "El monto debe ser positivo" });
+    }
+
+    const allowed = await ensureObraAsignada(req, obra_id);
+    if (!allowed) {
+      return res.status(403).json({ error: "No tienes acceso a esta obra" });
+    }
+
+    const obraCheck = await obraActiva(obra_id);
+    if (!obraCheck.ok) {
+      return res.status(400).json({ error: obraCheck.error });
+    }
+
     const usuario_id = req.user.id;
 
     const [result] = await pool.query(
-      `INSERT INTO gastos (obra_id, fecha, monto, cuenta_id, partida, descripcion, usuario_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [obra_id, fecha, monto, cuenta_id, partida, descripcion, usuario_id]
+      `INSERT INTO gastos (obra_id, fecha, monto, cuenta_id, partida, descripcion, comprobante_url, usuario_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        obra_id,
+        fecha,
+        monto,
+        cuenta_id,
+        partida,
+        descripcion ?? concepto,
+        comprobante_url,
+        usuario_id
+      ]
     );
 
     // (Opcional) asegurar tipo numérico en la respuesta
@@ -33,7 +88,8 @@ router.post("/gastos", requireAuth, async (req, res) => {
       monto: Number.isFinite(montoNum) ? montoNum : monto,
       cuenta_id,
       partida,
-      descripcion,
+      descripcion: descripcion ?? concepto,
+      comprobante_url,
       usuario_id
     });
   } catch (e) {
@@ -71,6 +127,11 @@ router.get("/gastos", requireAuth, async (req, res) => {
     if (desde) { where.push("fecha >= ?"); params.push(desde); }
     if (hasta) { where.push("fecha <= ?"); params.push(hasta); }
 
+    if (req.user.rol === "residente") {
+      where.push("obra_id IN (SELECT obra_id FROM usuarios_obras WHERE usuario_id = ?)");
+      params.push(req.user.id);
+    }
+
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     // Query data
@@ -84,6 +145,7 @@ router.get("/gastos", requireAuth, async (req, res) => {
         cuenta_id,
         partida,
         descripcion,
+        comprobante_url,
         usuario_id
       FROM gastos
       ${whereSql}
@@ -116,10 +178,14 @@ router.get("/gastos", requireAuth, async (req, res) => {
   }
 });
 
-// ✅ Eliminar gasto (físico)
+// ✅ Eliminar gasto (físico) - solo admin
 router.delete("/gastos/:id", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (req.user.rol !== "admin") {
+      return res.status(403).json({ error: "Acceso denegado" });
+    }
 
     const [result] = await pool.query(`DELETE FROM gastos WHERE id = ?`, [id]);
 

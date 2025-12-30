@@ -5,7 +5,7 @@ export default function GastosList({ gastos = [] }) {
     <ul>
       {gastos.map((g) => (
         <li key={g.id}>
-          {g.fecha} — {g.concepto} — ${g.monto}
+          {g.fecha} — {g.descripcion || g.concepto} — ${g.monto}
         </li>
       ))}
     </ul>

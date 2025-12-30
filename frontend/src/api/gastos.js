@@ -7,7 +7,7 @@ export async function fetchGastos(obraId, token) {
 
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body?.error || "Error al cargar gastos");
-  return body;
+  return Array.isArray(body?.data) ? body.data : body;
 }
 
 export async function createGasto(data, token) {
