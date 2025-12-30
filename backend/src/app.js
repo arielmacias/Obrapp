@@ -7,6 +7,10 @@ const meRoutes = require("./routes/me.routes");
 const obrasRoutes = require("./routes/obras.routes");
 const gastosRoutes = require("./routes/gastos.routes");
 const cuentasRoutes = require("./routes/cuentas.routes");
+const movimientosRoutes = require("./routes/movimientos.routes");
+const pagosRoutes = require("./routes/pagos.routes");
+const estimacionesRoutes = require("./routes/estimaciones.routes");
+const usuariosRoutes = require("./routes/usuarios.routes");
 
 const app = express();
 
@@ -33,6 +37,10 @@ app.use("/api", meRoutes);
 app.use("/api", obrasRoutes);
 app.use("/api", gastosRoutes); // 👈 ESTA LÍNEA ES CLAVE
 app.use("/api", cuentasRoutes);
+app.use("/api", movimientosRoutes);
+app.use("/api", pagosRoutes);
+app.use("/api", estimacionesRoutes);
+app.use("/api", usuariosRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

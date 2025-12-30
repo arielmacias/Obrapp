@@ -3,9 +3,10 @@ const router = express.Router();
 
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth.middleware");
+const { requireAdmin } = require("../middleware/roles.middleware");
 
 // ✅ Crear cuenta
-router.post("/cuentas", requireAuth, async (req, res) => {
+router.post("/cuentas", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { nombre, descripcion = null, activa = 1 } = req.body;
 
@@ -31,7 +32,7 @@ router.post("/cuentas", requireAuth, async (req, res) => {
 });
 
 // ✅ Listar cuentas (por default solo activas)
-router.get("/cuentas", requireAuth, async (req, res) => {
+router.get("/cuentas", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { incluir_inactivas } = req.query;
 
@@ -52,7 +53,7 @@ router.get("/cuentas", requireAuth, async (req, res) => {
 });
 
 // ✅ Desactivar cuenta (soft delete)
-router.delete("/cuentas/:id", requireAuth, async (req, res) => {
+router.delete("/cuentas/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 

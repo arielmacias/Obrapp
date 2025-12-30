@@ -3,35 +3,54 @@ const router = express.Router();
 
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth.middleware.js");
+const { requireAdmin } = require("../middleware/roles.middleware.js");
 
+async function ensureObraAsignada(req, res, obraId) {
+  const [rows] = await pool.query(
+    `SELECT 1 FROM usuarios_obras WHERE usuario_id = ? AND obra_id = ? LIMIT 1`,
+    [req.user.id, obraId]
+  );
+  if (rows.length === 0) {
+    res.status(403).json({ error: "No tienes acceso a esta obra" });
+    return false;
+  }
+  return true;
+}
 
-//  Crear obra
-router.post("/obras", requireAuth, async (req, res) => {
+//  Crear obra (solo admin)
+router.post("/obras", requireAuth, requireAdmin, async (req, res) => {
   try {
     const {
       nombre,
       clave,
       direccion = null,
       cliente = null,
+      responsable = null,
       fecha_inicio = null,
       porcentaje_honorarios = null,
       estado = "activa"
     } = req.body;
 
-    if (!nombre || !clave) {
-      return res.status(400).json({ error: "nombre y clave son requeridos" });
+    if (!nombre || !clave || !cliente || !responsable || !fecha_inicio || porcentaje_honorarios == null) {
+      return res.status(400).json({
+        error: "nombre, clave, cliente, responsable, fecha_inicio y porcentaje_honorarios son requeridos"
+      });
+    }
+
+    if (!/^[A-Za-z]{3}$/.test(clave)) {
+      return res.status(400).json({ error: "clave debe tener 3 caracteres alfabéticos" });
     }
 
     const [result] = await pool.query(
-      `INSERT INTO obras (nombre, clave, direccion, cliente, fecha_inicio, porcentaje_honorarios, estado)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [nombre, clave, direccion, cliente, fecha_inicio, porcentaje_honorarios, estado]
+      `INSERT INTO obras (nombre, clave, direccion, cliente, responsable, fecha_inicio, porcentaje_honorarios, estado)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [nombre, clave.toUpperCase(), direccion, cliente, responsable, fecha_inicio, porcentaje_honorarios, estado]
     );
 
     return res.status(201).json({
       id: result.insertId,
       nombre,
-      clave,
+      clave: clave.toUpperCase(),
       estado
     });
   } catch (e) {
@@ -42,11 +61,26 @@ router.post("/obras", requireAuth, async (req, res) => {
 //  Listar obras
 router.get("/obras", requireAuth, async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      `SELECT id, nombre, clave, direccion, cliente, fecha_inicio, porcentaje_honorarios, estado
-       FROM obras
-       ORDER BY id DESC`
-    );
+    let rows = [];
+
+    if (req.user.rol === "residente") {
+      const [assigned] = await pool.query(
+        `SELECT o.id, o.nombre, o.clave, o.direccion, o.cliente, o.responsable, o.fecha_inicio, o.porcentaje_honorarios, o.estado
+         FROM obras o
+         INNER JOIN usuarios_obras uo ON uo.obra_id = o.id
+         WHERE uo.usuario_id = ?
+         ORDER BY o.id DESC`,
+        [req.user.id]
+      );
+      rows = assigned;
+    } else {
+      const [all] = await pool.query(
+        `SELECT id, nombre, clave, direccion, cliente, responsable, fecha_inicio, porcentaje_honorarios, estado
+         FROM obras
+         ORDER BY id DESC`
+      );
+      rows = all;
+    }
 
     return res.json(rows);
   } catch (e) {
@@ -60,7 +94,7 @@ router.get("/obras/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
 
     const [rows] = await pool.query(
-      `SELECT id, nombre, clave, direccion, cliente, fecha_inicio, porcentaje_honorarios, estado
+      `SELECT id, nombre, clave, direccion, cliente, responsable, fecha_inicio, porcentaje_honorarios, estado
        FROM obras
        WHERE id = ?
        LIMIT 1`,
@@ -71,6 +105,11 @@ router.get("/obras/:id", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Obra no encontrada" });
     }
 
+    if (req.user.rol === "residente") {
+      const ok = await ensureObraAsignada(req, res, id);
+      if (!ok) return;
+    }
+
     return res.json(rows[0]);
   } catch (e) {
     return res.status(500).json({ error: "Error obteniendo obra", details: e.message });
@@ -78,10 +117,14 @@ router.get("/obras/:id", requireAuth, async (req, res) => {
 });
 
 //  Editar obra (update parcial)
-router.put("/obras/:id", requireAuth, async (req, res) => {
+router.put("/obras/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, clave, direccion, cliente, fecha_inicio, porcentaje_honorarios, estado } = req.body;
+    const { nombre, clave, direccion, cliente, responsable, fecha_inicio, porcentaje_honorarios, estado } = req.body;
+
+    if (clave && !/^[A-Za-z]{3}$/.test(clave)) {
+      return res.status(400).json({ error: "clave debe tener 3 caracteres alfabéticos" });
+    }
 
     const [result] = await pool.query(
       `UPDATE obras
@@ -90,15 +133,17 @@ router.put("/obras/:id", requireAuth, async (req, res) => {
          clave = COALESCE(?, clave),
          direccion = COALESCE(?, direccion),
          cliente = COALESCE(?, cliente),
+         responsable = COALESCE(?, responsable),
          fecha_inicio = COALESCE(?, fecha_inicio),
          porcentaje_honorarios = COALESCE(?, porcentaje_honorarios),
          estado = COALESCE(?, estado)
        WHERE id = ?`,
       [
         nombre ?? null,
-        clave ?? null,
+        clave ? clave.toUpperCase() : null,
         direccion ?? null,
         cliente ?? null,
+        responsable ?? null,
         fecha_inicio ?? null,
         porcentaje_honorarios ?? null,
         estado ?? null,
@@ -117,7 +162,7 @@ router.put("/obras/:id", requireAuth, async (req, res) => {
 });
 
 //  Terminar obra (PATCH)
-router.patch("/obras/:id/terminar", requireAuth, async (req, res) => {
+router.patch("/obras/:id/terminar", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -139,7 +184,7 @@ router.patch("/obras/:id/terminar", requireAuth, async (req, res) => {
 });
 
 //  "Eliminar" obra (DELETE lógico) -> marcar como terminada
-router.delete("/obras/:id", requireAuth, async (req, res) => {
+router.delete("/obras/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -157,6 +202,68 @@ router.delete("/obras/:id", requireAuth, async (req, res) => {
     return res.json({ ok: true, id: Number(id), estado: "terminada" });
   } catch (e) {
     return res.status(500).json({ error: "Error eliminando obra", details: e.message });
+  }
+});
+
+// Asignar obra a residente
+router.post("/obras/:id/asignar", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { usuario_id } = req.body;
+
+    if (!usuario_id) {
+      return res.status(400).json({ error: "usuario_id es requerido" });
+    }
+
+    const [obraRows] = await pool.query(
+      "SELECT id FROM obras WHERE id = ? LIMIT 1",
+      [id]
+    );
+    if (obraRows.length === 0) {
+      return res.status(404).json({ error: "Obra no encontrada" });
+    }
+
+    const [usuarioRows] = await pool.query(
+      "SELECT id, rol FROM usuarios WHERE id = ? LIMIT 1",
+      [usuario_id]
+    );
+    if (usuarioRows.length === 0) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+    if (usuarioRows[0].rol !== "residente") {
+      return res.status(400).json({ error: "Solo se pueden asignar usuarios residentes" });
+    }
+
+    await pool.query(
+      `INSERT INTO usuarios_obras (usuario_id, obra_id)
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE usuario_id = VALUES(usuario_id)`,
+      [usuario_id, id]
+    );
+
+    return res.json({ ok: true, obra_id: Number(id), usuario_id: Number(usuario_id) });
+  } catch (e) {
+    return res.status(500).json({ error: "Error asignando obra", details: e.message });
+  }
+});
+
+// Listar residentes asignados a una obra
+router.get("/obras/:id/residentes", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [rows] = await pool.query(
+      `SELECT u.id, u.nombre, u.correo
+       FROM usuarios_obras uo
+       INNER JOIN usuarios u ON u.id = uo.usuario_id
+       WHERE uo.obra_id = ?
+       ORDER BY u.nombre ASC`,
+      [id]
+    );
+
+    return res.json(rows);
+  } catch (e) {
+    return res.status(500).json({ error: "Error listando residentes", details: e.message });
   }
 });
 

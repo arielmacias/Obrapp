@@ -85,6 +85,7 @@ CREATE TABLE gastos (
     cuenta_id INT NOT NULL,
     partida VARCHAR(100) NOT NULL,
     descripcion VARCHAR(255),
+    comprobante_url VARCHAR(255),
     usuario_id INT NOT NULL,
 
     FOREIGN KEY (obra_id) REFERENCES obras(id),
@@ -139,4 +140,3 @@ CREATE TABLE estimaciones_gastos (
     FOREIGN KEY (estimacion_id) REFERENCES estimaciones(id),
     FOREIGN KEY (gasto_id) REFERENCES gastos(id)
 );
-
