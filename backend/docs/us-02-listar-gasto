@@ -1,0 +1,41 @@
+# US-02 — Listar gastos
+
+## Objetivo
+Permitir consultar los gastos registrados, con filtros y paginación básica, para su consumo por frontend y para revisión operativa.
+
+---
+
+## Endpoint
+
+**GET** `/api/gastos`  
+**Auth:** Requiere JWT (middleware `requireAuth`)
+
+---
+
+## Query Params (opcionales)
+
+- `obra_id` (int) — filtra por obra
+- `cuenta_id` (int) — filtra por cuenta
+- `desde` (date `YYYY-MM-DD`) — fecha mínima (inclusive)
+- `hasta` (date `YYYY-MM-DD`) — fecha máxima (inclusive)
+- `limit` (int) — cantidad de registros por página (default 50, max 200)
+- `offset` (int) — desplazamiento para paginación (default 0)
+
+---
+
+## Respuesta (200)
+
+Retorna un objeto con metadatos de paginación y la lista de gastos.
+
+### Shape
+```json
+{
+  "total": 3,
+  "limit": 50,
+  "offset": 0,
+  "data": [
+    {
+      "id": 8,
+      "obra_id": 7,
+      "fecha": "2025-12-17",
+      "mon
