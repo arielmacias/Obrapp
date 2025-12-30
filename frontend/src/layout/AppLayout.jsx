@@ -9,17 +9,22 @@ export default function AppLayout() {
   };
 
   return (
-    <>
-      <header style={{ padding: 12, borderBottom: "1px solid #ddd" }}>
-        <strong>Obrapp Admin</strong>
-        <button onClick={logout} style={{ float: "right" }}>
-          Logout
-        </button>
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="brand">
+          <span className="brand-dot" />
+          <strong>Obrapp Admin</strong>
+        </div>
+        <div className="header-actions">
+          <button className="ghost-button" onClick={logout}>
+            Logout
+          </button>
+        </div>
       </header>
 
-      <main style={{ padding: 16 }}>
+      <main className="app-main">
         <Outlet />
       </main>
-    </>
+    </div>
   );
 }
